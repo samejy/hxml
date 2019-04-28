@@ -1,0 +1,14 @@
+<test attribute="test-attr">
+  <inner value="inner-attr1">
+    This is the contents
+  </inner>
+  <inner value="inner-attr2">
+    This is the contents
+  </inner>
+  <inner2 value="inner-attr3">
+    This is the contents
+  </inner2>
+  <inner2 value="inner-attr4">
+    This is the contents
+  </inner2>
+</test>
