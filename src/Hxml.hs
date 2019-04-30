@@ -10,6 +10,10 @@ import qualified Text.XML.Light as XML
 import Parser
 import qualified Syntax as S 
 
+data ParseResult
+  = Content [XML.Content]
+  | Attribute [XML.Attr]
+
 process :: IO ()
 process = do
   args <- getArgs
@@ -28,19 +32,24 @@ runQuery :: Either PE.ParseError S.Query -> [XML.Content] -> String
 runQuery (Left e) _ = "Error parsing query"
 runQuery (Right q) xml =
   -- TODO pretty print
-  concatMap XML.showContent (runQuery1 q $ makeRoot xml)
+  printResult (runQuery1 q $ Content xml)
   where 
     -- TODO - this cannot return attributes as they are not type XML.Content
-    runQuery1 :: [S.QueryNode] -> [XML.Content] -> [XML.Content]
-    runQuery1 query xmlr =
-        foldl runQueryNode xmlr query 
+    runQuery1 :: [S.QueryNode] -> ParseResult -> ParseResult
+    runQuery1 (q:qs) xmlr =
+        runQuery1 qs (runQueryNode xmlr q)
+    runQuery1 [] xmlr = xmlr
 
-makeRoot :: [XML.Content] -> [XML.Content]
-makeRoot xml = [XML.Elem $ XML.Element
-                            { XML.elName = XML.blank_name
-                            , XML.elContent = xml
-                            , XML.elLine = Nothing
-                            , XML.elAttribs = [] }]
+printResult :: ParseResult -> String
+printResult (Content c) = concatMap XML.showContent c
+printResult (Attribute a) = concatMap XML.showAttr a
+
+runQueryNode :: ParseResult -> S.QueryNode -> ParseResult
+runQueryNode (Content xml) S.Star = Content $ children xml
+runQueryNode (Content xml) (S.Elem q) = Content $ children $ filter (elemMatches q) xml
+runQueryNode (Content xml) (S.Array q) = Content $ children $ filter (elemMatches q) xml
+runQueryNode (Content xml) (S.Attr a) = Attribute $ filter (attrMatches a) $ concatMap elemAttributes xml
+-- runQueryNode (S.Indexed q ind) xml = filter (elemMatches q) (children xml)
 
 children :: [XML.Content] -> [XML.Content]
 children xml = concatMap elemChildren xml
@@ -58,13 +67,6 @@ elemAttributes _ = []
 
 stripNewLines s = replace "\n" "" s
 
-runQueryNode :: [XML.Content] -> S.QueryNode -> [XML.Content]
-runQueryNode xml S.Star = children xml
-runQueryNode xml (S.Elem q) = filter (elemMatches q) (children xml)
-runQueryNode xml (S.Array q) = filter (elemMatches q) (children xml)
--- runQueryNode (S.Attr q) xml = filter (attrMatches q) $ (attributes xml)
--- runQueryNode (S.Indexed q ind) xml = filter (elemMatches q) (children xml)
-
 elemMatches :: String -> XML.Content -> Bool
 elemMatches eName (XML.Elem c) =
   eName == n
@@ -75,4 +77,10 @@ attrMatches :: String -> XML.Attr -> Bool
 attrMatches aName c =
   aName == n
   where n = XML.qName $ XML.attrKey c
+
+attrName :: XML.Attr -> String
+attrName = XML.qName . XML.attrKey
+
+getAttr :: String -> XML.Content -> [XML.Attr]
+getAttr aName (XML.Elem el) = filter (\a -> (attrName a) == aName) (XML.elAttribs el)
 

@@ -5,7 +5,6 @@ import Text.Parsec.String (Parser)
 
 import Syntax
 
--- TODO improve this
 index :: Parser String
 index = many1 $ digit 
 
